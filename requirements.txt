@@ -1,0 +1,11 @@
+ccxt
+pandas
+numpy
+requests
+matplotlib
+seaborn
+scipy
+statsmodels
+lightgbm
+shap
+scikit-learn
