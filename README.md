@@ -49,11 +49,11 @@ Both datasets are merged on a shared minute-level timestamp index using
 
 DSA-Project/
 ├── data/
-│   ├── raw/                  # Raw API data
-│   └── processed/            # Merged dataset and plot outputs
+│   ├── raw/                  
+│   └── processed/            
 ├── notebooks/
-│   ├── 01_data_collection.ipynb   # Data fetching and merging pipeline
-│   └── 02_eda_hypothesis.ipynb    # EDA, visualizations, hypothesis tests
+│   ├── 01_data_collection.ipynb   
+│   └── 02_eda_hypothesis.ipynb   
 ├── README.md
 └── requirements.txt
 
