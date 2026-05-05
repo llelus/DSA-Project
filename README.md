@@ -1,103 +1,107 @@
-# DSA-Project
-Sabancı University dsa-210 term project
-### Proposal
-## Spot Market vs. Prediction Market Lag: Binance vs. Polymarket
+# DSA-210 Term Project — Spot Market vs Prediction Market Efficiency
 
-# Data Source and Collection
+**Sabanci University | DSA-210 | Spring 2026**
 
-The primary dataset will be sourced from the Polymarket CLOB (Central Limit Order Book) API, which provides public, unauthenticated access to historical per-minute price series for prediction market contracts. A BTC price-related market will be selected based on three criteria: total trading volume exceeding $50,000, a current contract price between 0.15 and 0.85 (ensuring the outcome remains genuinely uncertain), and a resolution date at least four weeks in the future. This selection process will be performed programmatically before data collection begins.
-As the enrichment dataset, one-minute OHLCV (Open, High, Low, Close, Volume) data for the BTC/USDT pair will be collected via CCXT, a unified cryptocurrency exchange library, connecting to Binance as the primary source. CCXT allows seamless switching to alternative exchanges (Kraken, Coinbase) if access issues arise, without modifying any downstream code. Both datasets will cover a three-month window (January 2025 — March 2025) and will be aligned to a common one-minute timestamp index using pandas merge_asof, which matches each Polymarket observation to the nearest available Binance bar within a five-minute tolerance.
+## Research Question
 
-# Dataset Characteristics
+Does Polymarket efficiently price Bitcoin-related outcomes in real time, or is there a measurable lag compared to the spot market (Kraken)? This project compares two fundamentally different market mechanisms — a continuous spot exchange and a binary prediction market — and examines how quickly new price information propagates between them.
 
-The merged dataset is expected to contain approximately 130,000 rows, each representing one minute of observations. Key columns will include the Binance close price, one-minute percentage return, and trading volume, alongside the Polymarket yes-token price (a value in [0, 1] representing the implied probability of the event), and its minute-over-minute change rate. Derived features will include 15-minute rolling returns and volatility for both series, lag-shifted Polymarket prices, and a binary drop-event indicator triggered when the BTC return falls below a predefined threshold (e.g., −2% within 15 minutes).
+---
 
+## Key Findings
 
+### Hypothesis 1 — BTC Position vs Polymarket Probability
+- Pearson r = **0.862**, p < 0.001
+- Strong positive correlation between BTC's distance from the prediction threshold and Polymarket yes_price.
+- **Result:** Polymarket correctly reflects BTC's general position.
 
-## Project Overview
-This project investigates whether prediction markets (Polymarket) efficiently 
-price Bitcoin-related outcomes in real time, or whether there is a measurable 
-lag compared to the spot market (Kraken/Binance). Unlike standard crypto price 
-analyses, this project compares two fundamentally different market mechanisms: 
-a continuous spot exchange and a binary prediction market — examining how 
-quickly new price information propagates between them.
+### Hypothesis 2 — Lag Detection
+- Cross-lag correlation peaks at **lag = 4 hours**
+- Polymarket lags the BTC spot market by approximately 4 hours on average.
+- **Result:** Real-time pricing is not occurring; measurable delay exists.
 
-## Research Questions
-1. Does BTC's position relative to a prediction market threshold explain 
-   Polymarket probability levels? (Hypothesis 1)
-2. Do Polymarket probabilities update with a measurable delay after BTC 
-   spot price movements? (Hypothesis 2)
-3. Does market volatility affect the speed of Polymarket's price updates? 
-   (Hypothesis 3)
+### Hypothesis 3 — Volatility Effect
+- t = 3.14, p = 0.0017
+- Larger Polymarket updates occur during **low** volatility periods.
+- **Result:** High volatility drives prices to 0/1 extremes (ceiling/floor effect), leaving no room for adjustment. Low volatility keeps prices in the uncertain range where updates are more frequent.
 
-## Data Sources
-- **Primary:** Polymarket CLOB API — per-minute price history of 
-  "Bitcoin above $X" prediction markets
-- **Enrichment:** Kraken API via CCXT — 1-minute BTC/USDT OHLCV spot data
+### ML Efficiency Measurement
 
-Both datasets are merged on a shared minute-level timestamp index using 
-`pandas.merge_asof`.
+| Model | AUC-ROC | PR-AUC |
+|---|---|---|
+| Full model (BTC + Polymarket history) | 0.9705 | 0.8167 |
+| BTC-only model | 0.6800 | 0.1569 |
+| **AUC Gap** | **0.2905** | |
+
+The full model's predictive power comes primarily from Polymarket's own price momentum (`yes_price`, `poly_lag_3`), not from BTC signals. BTC-only model drops to AUC 0.68, confirming that Polymarket moves largely on internal momentum rather than real-time BTC information.
+
+**Overall conclusion:** Polymarket is **partially efficient**. It correctly reflects BTC's direction (~97.3% agreement) but reacts with a ~4-hour delay and relies primarily on its own momentum rather than spot market signals.
+
+---
 
 ## Dataset
-- ~1,000+ rows (growing daily), each representing one minute of observation
-- 60+ unique prediction market contracts
-- Key variables: `yes_price`, `btc_price`, `threshold`, 
-  `btc_to_threshold_pct`, `btc_return_1m`, `poly_change_1m`, 
-  `rolling_volatility_15m`
+
+| | Value |
+|---|---|
+| Total rows | 96,944 |
+| Unique markets | 1,258 |
+| Date range | April 9 – May 5, 2026 |
+| BTC data | Hourly Kraken OHLCV |
+| Missing btc_price | 0 |
+
+Key features: `yes_price`, `btc_price`, `threshold`, `btc_to_threshold_pct`, `btc_return_1m`, `rolling_volatility_15m`, `poly_lag_1`, `poly_lag_3`
+
+---
 
 ## Repository Structure
 
+```
 DSA-Project/
+├── 01_data_collection.ipynb   # Data pipeline: Polymarket + Kraken fetch & merge
+├── 02_eda_hypothesis.ipynb    # EDA, visualizations, hypothesis tests (H1, H2, H3)
+├── 03_ml_shap.ipynb           # LightGBM, AUC-ROC, threshold opt, BTC-only, lag measurement
 ├── data/
-│   ├── raw/                  
-│   └── processed/            
-├── notebooks/
-│   ├── 01_data_collection.ipynb   
-│   └── 02_eda_hypothesis.ipynb   
-├── README.md
-└── requirements.txt
+│   ├── raw/                   # kraken_raw.csv, polymarket_raw.csv
+│   └── processed/             # merged_dataset.csv, all plots
+├── requirements.txt
+└── README.md
+```
 
-
+---
 
 ## How to Reproduce
-1. Clone the repo
+
 ```bash
 git clone https://github.com/llelus/DSA-Project.git
 cd DSA-Project
-```
-
-2. Install dependencies
-```bash
 pip install -r requirements.txt
 ```
 
-3. Run data collection
+Open notebooks in order on Google Colab:
+1. `01_data_collection.ipynb` — fetch and merge data
+2. `02_eda_hypothesis.ipynb` — EDA and hypothesis tests
+3. `03_ml_shap.ipynb` — ML pipeline and efficiency measurement
 
-Open notebooks/01_data_collection.ipynb and run all cells
+---
 
-4. Run analysis
-Open notebooks/02_eda_hypothesis.ipynb and run all cells
+## SHAP Feature Importance
 
-## Key Findings (so far)
-- **Hypothesis 1:** Strong positive correlation (r=0.862, p<0.001) between 
-  BTC's distance from the prediction threshold and Polymarket probability — 
-  the market accurately prices BTC position.
-- **Hypothesis 2:** No statistically significant lag detected with current 
-  data volume; more data required for reliable CCF/Granger results.
-- **Hypothesis 3:** Counterintuitively, Polymarket shows larger price updates 
-  during low volatility periods (p=0.0017), likely because high volatility 
-  drives prices to 0/1 extremes leaving no room for adjustment.
+| Rank | Feature | Mean SHAP |
+|---|---|---|
+| 1 | yes_price | +3.00 |
+| 2 | poly_lag_3 | +1.16 |
+| 3 | btc_to_threshold_pct | +0.63 |
+| 4 | poly_lag_1 | +0.52 |
+| 5 | btc_lag_1 | +0.19 |
+| 6 | btc_return_1m | +0.14 |
+| 7 | rolling_volatility_15m | +0.07 |
+
+---
 
 ## AI Usage Disclosure
-This project was developed with assistance from Claude (Anthropic). 
-AI was used for: API integration guidance, code debugging, statistical 
-method selection, and interpretation of results. All analytical decisions, 
-data collection strategy, and findings interpretation were reviewed and 
-validated by the student.
+
+This project was developed with assistance from Claude (Anthropic). AI was used for: API integration guidance, code debugging, statistical method selection, and interpretation of results. All analytical decisions, data collection strategy, and findings interpretation were reviewed and validated by the student.
 
 ## Dependencies
+
 See `requirements.txt`
-
-
-
-
