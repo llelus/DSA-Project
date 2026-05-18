@@ -101,6 +101,52 @@ Open notebooks in order on Google Colab:
 
 ---
 
+## Discussion — Practical Implications of the 4-Hour Lag
+
+### What does the lag mean?
+When BTC crosses a prediction market threshold, Polymarket participants take approximately
+4 hours to fully reprice the outcome. During this window, the market trades at a
+probability that no longer reflects available spot price information — a clear departure
+from strong-form efficiency.
+
+### Is arbitrage theoretically possible?
+Yes, under idealized conditions. A trader who monitors BTC spot price in real time could:
+1. Observe BTC move above/below a threshold at time T
+2. Buy the underpriced outcome on Polymarket while it still reflects T−4h information
+3. Capture the repricing as other participants update over the next ~4 hours
+
+The 2.7% disagreement rate (226/8,269 observations where BTC and Polymarket disagree
+on direction) represents the observable arbitrage surface. The highest disagreement
+occurs when Polymarket certainty is 0.1–0.2 (16.7% disagreement) — these are the
+most exploitable moments.
+
+### Why is the lag not fully arbitraged away?
+Several structural frictions prevent efficient exploitation:
+
+- **Liquidity**: Bitcoin prediction markets on Polymarket are thinly traded. Large
+  positions move the price and erode the edge before it is captured.
+- **Transaction costs**: Polymarket operates on-chain (Polygon). Gas fees and
+  USDC bridging costs reduce net profit on small mispricings.
+- **Market lifetime**: These markets expire in 2–4 days. A 4-hour lag consumes
+  a significant fraction of remaining market life, compressing the holding window.
+- **Participant composition**: Polymarket's Bitcoin market participants are largely
+  retail traders without automated BTC monitoring — the lag exists precisely because
+  those who could close it choose not to (or cannot afford to).
+
+### Who could exploit it?
+The lag is most actionable for algorithmic traders with real-time BTC price feeds,
+low transaction costs, and the ability to hold positions across multiple concurrent
+markets. For a retail participant operating manually, the combination of low
+liquidity, on-chain friction, and the need for continuous monitoring makes systematic
+exploitation impractical.
+
+This finding is consistent with the **adaptive market hypothesis** (Lo, 2004):
+markets are not statically efficient or inefficient — they reflect the capabilities
+and incentives of their current participant base. Polymarket's 4-hour lag will likely
+compress as the platform matures and attracts more sophisticated liquidity providers.
+
+---
+
 ## AI Usage Disclosure
 
 This project was developed with assistance from Claude (Anthropic). AI was used for: API integration guidance, code debugging, statistical method selection, and interpretation of results. All analytical decisions, data collection strategy, and findings interpretation were reviewed and validated by the student.
