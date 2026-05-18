@@ -2,6 +2,17 @@ import pandas as pd
 import numpy as np
 
 
+def colab_setup():
+    """Install required packages in a Colab session."""
+    import subprocess, sys
+    pkgs = ["ccxt", "lightgbm", "shap", "statsmodels"]
+    subprocess.run(
+        [sys.executable, "-m", "pip", "install", "-q"] + pkgs,
+        check=True
+    )
+    print("Packages ready:", ", ".join(pkgs))
+
+
 def load_and_prepare(csv_path="data/processed/merged_dataset.csv"):
     """Load merged dataset, filter threshold markets, compute standard features.
 
