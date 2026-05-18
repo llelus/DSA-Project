@@ -11,29 +11,32 @@ Does Polymarket efficiently price Bitcoin-related outcomes in real time, or is t
 ## Key Findings
 
 ### Hypothesis 1 — BTC Position vs Polymarket Probability
-- Pearson r = **0.862**, p < 0.001
+- Pearson r = **0.852**, p < 0.001
 - Strong positive correlation between BTC's distance from the prediction threshold and Polymarket yes_price.
 - **Result:** Polymarket correctly reflects BTC's general position.
 
 ### Hypothesis 2 — Lag Detection
-- Cross-lag correlation peaks at **lag = 4 hours**
-- Polymarket lags the BTC spot market by approximately 4 hours on average.
-- **Result:** Real-time pricing is not occurring; measurable delay exists.
+- Cross-lag correlation peaks at **lag = 4 hours** (CCF = 0.0935, Granger p < 0.0001 for all lags 1–6h)
+- Confirmed independently by both CCF on hourly aggregated signal (02_eda_hypothesis) and per-market Pearson cross-lag (03_ml_shap).
+- **Result:** Real-time pricing is not occurring; Polymarket systematically reprices ~4 hours after BTC moves.
 
 ### Hypothesis 3 — Volatility Effect
-- t = 3.14, p = 0.0017
+- t = 5.68, p < 0.0001
 - Larger Polymarket updates occur during **low** volatility periods.
 - **Result:** High volatility drives prices to 0/1 extremes (ceiling/floor effect), leaving no room for adjustment. Low volatility keeps prices in the uncertain range where updates are more frequent.
 
 ### ML Efficiency Measurement
 
-| Model | AUC-ROC | PR-AUC |
-|---|---|---|
-| Full model (BTC + Polymarket history) | 0.9705 | 0.8167 |
-| BTC-only model | 0.6800 | 0.1569 |
-| **AUC Gap** | **0.2905** | |
+| Model | AUC-ROC | 95% CI | PR-AUC |
+|---|---|---|---|
+| Full model (BTC + Polymarket history) | 0.9775 | [0.9724, 0.9825] | 0.8343 |
+| Poly-only (autocorrelation baseline) | 0.9705 | [0.9631, 0.9772] | — |
+| BTC-only model | 0.6800 | [0.6576, 0.7015] | 0.1569 |
+| **Full vs BTC-only gap** | **0.2975** | | |
 
-The full model's predictive power comes primarily from Polymarket's own price momentum (`yes_price`, `poly_lag_3`), not from BTC signals. BTC-only model drops to AUC 0.68, confirming that Polymarket moves largely on internal momentum rather than real-time BTC information.
+Confidence intervals computed via bootstrap resampling (n=1000).
+
+The full model's predictive power comes primarily from Polymarket's own price momentum (`yes_price`, `poly_lag_3`), confirmed by the Poly-only ablation (AUC 0.9705 ≈ full model). BTC-only model drops to AUC 0.68 — statistically significantly better than random (lower CI 0.66 > 0.50) but far below the full model (CIs do not overlap). This confirms Polymarket moves largely on internal momentum rather than real-time BTC information.
 
 **Overall conclusion:** Polymarket is **partially efficient**. It correctly reflects BTC's direction (~97.3% agreement) but reacts with a ~4-hour delay and relies primarily on its own momentum rather than spot market signals.
 
@@ -46,7 +49,7 @@ The full model's predictive power comes primarily from Polymarket's own price mo
 | Total rows | 96,944 |
 | Unique markets | 1,258 |
 | Date range | April 9 – May 5, 2026 |
-| BTC data | Hourly Kraken OHLCV |
+| BTC data | 1-minute Kraken OHLCV |
 | Missing btc_price | 0 |
 
 Key features: `yes_price`, `btc_price`, `threshold`, `btc_to_threshold_pct`, `btc_return_1m`, `rolling_volatility_15m`, `poly_lag_1`, `poly_lag_3`
@@ -88,13 +91,13 @@ Open notebooks in order on Google Colab:
 
 | Rank | Feature | Mean SHAP |
 |---|---|---|
-| 1 | yes_price | +3.00 |
-| 2 | poly_lag_3 | +1.16 |
-| 3 | btc_to_threshold_pct | +0.63 |
-| 4 | poly_lag_1 | +0.52 |
-| 5 | btc_lag_1 | +0.19 |
-| 6 | btc_return_1m | +0.14 |
-| 7 | rolling_volatility_15m | +0.07 |
+| 1 | yes_price | +2.95 |
+| 2 | poly_lag_3 | +1.05 |
+| 3 | btc_to_threshold_pct | +0.56 |
+| 4 | poly_lag_1 | +0.49 |
+| 5 | btc_lag_1 | +0.15 |
+| 6 | btc_return_1m | +0.11 |
+| 7 | rolling_volatility_15m | +0.06 |
 
 ---
 
