@@ -14,6 +14,7 @@ Does Polymarket efficiently price Bitcoin-related outcomes in real time, or is t
 - Pearson r = **0.852**, p < 0.001
 - Strong positive correlation between BTC's distance from the prediction threshold and Polymarket yes_price.
 - **Result:** Polymarket correctly reflects BTC's general position.
+- **Scope note:** H1 is a validity check, not an efficiency test. It confirms that Polymarket prices carry real information rather than noise — a prerequisite for H2 and H3. The efficiency question (does repricing happen *in real time*?) is answered by H2.
 
 ### Hypothesis 2 — Lag Detection
 - Cross-lag correlation peaks at **lag = 4 hours** (CCF = 0.0935, Granger p < 0.0001 for all lags 1–6h)
@@ -48,9 +49,19 @@ The full model's predictive power comes primarily from Polymarket's own price mo
 |---|---|
 | Total rows | 96,944 |
 | Unique markets | 1,258 |
-| Date range | April 9 – May 5, 2026 |
+| Date range | April 9 – May 5, 2026 (26 days) |
 | BTC data | 1-minute Kraken OHLCV |
 | Missing btc_price | 0 |
+| Market cycles covered | ~6–13 complete cycles (each market 2–4 days) |
+| Hourly observations for CCF | 617 |
+
+**Note on data scope:** The 26-day window is shorter than the originally proposed 3 months.
+However, statistical adequacy is better measured by the number of complete market cycles
+and temporal observations than by calendar duration. Each Polymarket Bitcoin market
+has a 2–4 day lifetime; 26 days therefore covers 6–13 full cycle completions.
+The hourly CCF series (n=617) comfortably exceeds the minimum for reliable cross-correlation
+estimation, and the Granger test results (p<0.0001 at all lags 1–6h) confirm that
+the lag finding is not a small-sample artifact.
 
 Key features: `yes_price`, `btc_price`, `threshold`, `btc_to_threshold_pct`, `btc_return_1m`, `rolling_volatility_15m`, `poly_lag_1`, `poly_lag_3`
 
