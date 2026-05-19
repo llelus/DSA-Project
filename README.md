@@ -2,6 +2,16 @@
 
 **Sabanci University | DSA-210 | Spring 2026**
 
+## Motivation
+
+Prediction markets are often cited as efficient aggregators of dispersed information — in theory, they should price outcomes as quickly as any other market. Polymarket, the largest on-chain prediction market, runs binary Bitcoin price markets that resolve within 2–4 days. If Polymarket is truly efficient, its probabilities should update in near real-time as BTC spot prices move.
+
+This raises a testable question: does Polymarket actually reprice Bitcoin outcomes as fast as the spot market moves, or does it lag behind? The answer has practical implications for anyone using prediction market probabilities as a signal, and theoretical implications for market microstructure — specifically, whether binary outcome markets with retail participant bases can achieve the same informational efficiency as continuous spot exchanges.
+
+The project was motivated by the observation that Polymarket Bitcoin markets are thinly traded by predominantly retail participants who lack automated price monitoring — conditions that structurally favor a lag. The goal was to measure that lag rigorously and quantify how much of Polymarket's price movement is driven by BTC information versus its own momentum.
+
+---
+
 ## Research Question
 
 Does Polymarket efficiently price Bitcoin-related outcomes in real time, or is there a measurable lag compared to the spot market (Kraken)? This project compares two fundamentally different market mechanisms — a continuous spot exchange and a binary prediction market — and examines how quickly new price information propagates between them.
@@ -155,6 +165,30 @@ This finding is consistent with the **adaptive market hypothesis** (Lo, 2004):
 markets are not statically efficient or inefficient — they reflect the capabilities
 and incentives of their current participant base. Polymarket's 4-hour lag will likely
 compress as the platform matures and attracts more sophisticated liquidity providers.
+
+---
+
+## Limitations and Future Work
+
+### Current limitations
+
+- **Data window:** The dataset covers 26 days (April 9 – May 5, 2026), shorter than the originally planned 3 months. While the number of complete market cycles (6–13) and hourly observations (n=617) are statistically adequate for the tests performed, a longer window would capture different BTC volatility regimes and strengthen generalizability.
+
+- **Single asset:** All markets are Bitcoin-denominated. Whether the 4-hour lag generalizes to other cryptocurrency prediction markets (ETH, SOL) or non-crypto Polymarket categories is untested.
+
+- **API fidelity:** Polymarket price history is fetched at the maximum available fidelity (1-minute ticks), but some markets have sparse tick data — particularly short-lived markets with low trading activity. Sparse markets may underrepresent genuine price discovery.
+
+- **Target imbalance:** The ML target (yes_price increase in the next tick) has a 10:1 class imbalance. While mitigated via `class_weight="balanced"` and threshold optimization, the imbalance limits the interpretability of absolute precision/recall figures for the minority class.
+
+- **Lag measurement granularity:** The CCF-based lag estimate is limited to 1-hour resolution. The true repricing delay could be finer-grained (e.g., 2.5 hours) but cannot be resolved at hourly aggregation.
+
+### Future extensions
+
+- **Longer time horizon:** Extending to 3–6 months would capture multiple BTC market cycles and allow regime-conditional lag analysis (bull vs bear periods).
+- **Cross-asset replication:** Applying the same pipeline to ETH, SOL, and non-crypto Polymarket categories would test whether the lag is specific to Bitcoin or a general property of binary prediction markets.
+- **Intraday lag resolution:** Using minute-level CCF (rather than hourly) would sharpen the lag estimate and reveal whether the 4-hour figure is a ceiling or a midpoint.
+- **Order book data:** Incorporating Polymarket CLOB depth data would allow analysis of whether lag correlates with bid-ask spread width — a more direct measure of liquidity constraints.
+- **Live trading simulation:** A backtested strategy exploiting the disagreement window (2.7% of observations) would quantify whether the lag is economically significant after transaction costs.
 
 ---
 
