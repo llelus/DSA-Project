@@ -32,10 +32,10 @@ def load_and_prepare(csv_path="data/processed/merged_dataset.csv"):
     print(f"Unique markets : {df['conditionId'].nunique()}")
     print(f"Date range     : {df['timestamp'].min()} -> {df['timestamp'].max()}")
 
-    # Threshold price from question text
+    # Threshold price from question text — matches both "above X" and "below X"
     df["threshold"] = (
         df["question"]
-        .str.extract(r"above ([\d,]+)")
+        .str.extract(r"(?:above|below) ([\d,]+)")
         .replace(",", "", regex=True)
         .astype(float)
     )
