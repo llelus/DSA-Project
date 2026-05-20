@@ -34,8 +34,9 @@ Does Polymarket efficiently price Bitcoin-related outcomes in real time, or is t
 - **Scope note:** H1 is a validity check, not an efficiency test. It confirms that Polymarket prices carry real information rather than noise — a prerequisite for H2 and H3. The efficiency question (does repricing happen *in real time*?) is answered by H2.
 
 ### Hypothesis 2 — Lag Detection
-- Hourly CCF peaks at **lag = 4 hours** (CCF = 0.0935); refined via 15-minute CCF to **lag = 3.5 hours (210 min)** (CCF = 0.0513, exceeds 95% CI). Granger p < 0.0001 for all lags 1–6h.
+- Hourly CCF peaks at **lag = 4 hours** (CCF = 0.0935); refined via 15-minute CCF to **lag = 3.5 hours (210 min)** (CCF = 0.0513, exceeds 95% CI). Granger p < 0.0001 for all lags 1–6h (BTC → Polymarket direction).
 - Confirmed independently by both CCF on aggregated signal (02_eda_hypothesis) and per-market Pearson cross-lag (03_ml_shap).
+- **Note on Granger directionality:** Only the BTC → Polymarket direction was tested. The reverse (Polymarket → BTC) was not tested, as Polymarket's Bitcoin market trading volume is several orders of magnitude smaller than BTC spot markets, making any causal influence on spot prices economically implausible.
 - **Granularity note:** The "4 hours" figure from hourly CCF was the nearest resolvable bin. The 15-minute robustness check refines this to ~3.5 hours (±15 min).
 - **Result:** Real-time pricing is not occurring; Polymarket systematically reprices ~3.5 hours after BTC moves, consistent with **semi-strong form inefficiency** under the Efficient Market Hypothesis (public information — BTC spot price — is not immediately reflected in prices).
 
