@@ -212,7 +212,7 @@ compress as the platform matures and attracts more sophisticated liquidity provi
 
 ### Current limitations
 
-- **Data window:** The dataset covers 26 days (April 9 – May 5, 2026), shorter than the originally planned 3 months. While the number of complete market cycles (6–13) and hourly observations (n=617) are statistically adequate for the tests performed, a longer window would capture different BTC volatility regimes and strengthen generalizability.
+- **Data window:** The dataset covers 26 days (April 9 – May 5, 2026), shorter than originally intended. An autonomous data collection system ran for approximately 2 months prior to analysis; however, a storage failure resulted in the loss of historical records, leaving only the most recent 26-day window available. While the number of complete market cycles (6–13) and hourly observations (n=617) are statistically adequate for the tests performed, a longer window would capture different BTC volatility regimes and strengthen generalizability.
 
 - **Single asset:** All markets are Bitcoin-denominated. Whether the 3.5-hour lag generalizes to other cryptocurrency prediction markets (ETH, SOL) or non-crypto Polymarket categories is untested.
 
