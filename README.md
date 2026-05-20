@@ -49,14 +49,13 @@ Does Polymarket efficiently price Bitcoin-related outcomes in real time, or is t
 
 | Model | AUC-ROC | 95% CI | PR-AUC |
 |---|---|---|---|
-| Full model (BTC + Polymarket history) | 0.9775 | [0.9724, 0.9825] | 0.8343 |
-| Poly-only (autocorrelation baseline) | 0.9705 | [0.9631, 0.9772] | ~0.83 ¹ |
-| BTC-only model | 0.6800 | [0.6576, 0.7015] | 0.1569 |
+| Full model (BTC + Polymarket history) | 0.9775 | [0.9724, 0.9825] | 0.8366 |
+| Poly-only (autocorrelation baseline) | 0.9705 | [0.9631, 0.9772] | 0.8139 |
+| BTC-only model | 0.6800 | [0.6576, 0.7015] | 0.1635 |
 | **Full vs BTC-only gap** | **0.2975** | | |
 
 Confidence intervals computed via bootstrap resampling (n=1000).
 
-¹ *Poly-only PR-AUC (`poly_ap` in `03_ml_shap.ipynb`) is not yet in the saved output of this run. Given AUC parity (0.9705 vs 0.9775), it is expected to be ~0.83 — close to the full model and far above the BTC-only baseline (0.1569). Re-running cell-9 of `03_ml_shap.ipynb` will print the exact value.*
 
 The full model's predictive power comes primarily from Polymarket's own price momentum (`yes_price`, `poly_lag_3`), confirmed by the Poly-only ablation (AUC 0.9705 ≈ full model). BTC-only model drops to AUC-ROC 0.68 and PR-AUC 0.16 — the PR-AUC gap (0.8343 vs 0.1569) is more informative than the AUC-ROC gap under the 10:1 class imbalance, and confirms that BTC signals alone provide near-negligible minority-class predictive power. Full vs BTC-only 95% CIs do not overlap, confirming statistical significance.
 
