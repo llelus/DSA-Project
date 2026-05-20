@@ -58,7 +58,7 @@ Does Polymarket efficiently price Bitcoin-related outcomes in real time, or is t
 Confidence intervals computed via bootstrap resampling (n=1000).
 
 
-The full model's predictive power comes primarily from Polymarket's own price momentum (`yes_price`, `poly_lag_3`), confirmed by the Poly-only ablation (AUC 0.9705 ≈ full model). BTC-only model drops to AUC-ROC 0.68 and PR-AUC 0.16 — the PR-AUC gap (0.8343 vs 0.1569) is more informative than the AUC-ROC gap under the 10:1 class imbalance, and confirms that BTC signals alone provide near-negligible minority-class predictive power. Full vs BTC-only 95% CIs do not overlap, confirming statistical significance.
+The full model's predictive power comes primarily from Polymarket's own price momentum (`yes_price`, `poly_lag_3`), confirmed by the Poly-only ablation (AUC 0.9705 ≈ full model). BTC-only model drops to AUC-ROC 0.68 and PR-AUC 0.16 — the PR-AUC gap (0.8366 vs 0.1635) is more informative than the AUC-ROC gap under the 10:1 class imbalance, and confirms that BTC signals alone provide near-negligible minority-class predictive power. Full vs BTC-only 95% CIs do not overlap, confirming statistical significance.
 
 **Overall conclusion:** Polymarket exhibits **semi-strong form inefficiency** under the Efficient Market Hypothesis: publicly available BTC spot price information (a semi-strong form signal) is not immediately reflected in Polymarket prices. The market reacts with a **~3.5-hour delay** (210 min, confirmed at ±15 min resolution) and relies primarily on its own momentum rather than spot market signals. This is not a partial failure of efficiency — it is a clear failure of semi-strong form efficiency, consistent with a retail-dominated, thinly-traded market.
 
@@ -174,8 +174,8 @@ liquidity constraints, and execution risk are not fully modeled.*
 
 Under idealized conditions, a trader who monitors BTC spot price in real time could:
 1. Observe BTC move above/below a threshold at time T
-2. Buy the underpriced outcome on Polymarket while it still reflects T−4h information
-3. Capture the repricing as other participants update over the next ~4 hours
+2. Buy the underpriced outcome on Polymarket while it still reflects T−3.5h information
+3. Capture the repricing as other participants update over the next ~3.5 hours
 
 The 2.7% disagreement rate (226/8,269 observations where BTC and Polymarket disagree
 on direction) represents an upper bound on the observable arbitrage surface. The highest
