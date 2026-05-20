@@ -40,9 +40,10 @@ Does Polymarket efficiently price Bitcoin-related outcomes in real time, or is t
 - **Result:** Real-time pricing is not occurring; Polymarket systematically reprices ~3.5 hours after BTC moves, consistent with **semi-strong form inefficiency** under the Efficient Market Hypothesis (public information — BTC spot price — is not immediately reflected in prices).
 
 ### Hypothesis 3 — Volatility Effect
-- t = 5.68, p < 0.0001
-- Larger Polymarket updates occur during **low** volatility periods.
-- **Result:** High volatility drives prices to 0/1 extremes (ceiling/floor effect), leaving no room for adjustment. Low volatility keeps prices in the uncertain range where updates are more frequent.
+- Independent samples t-test (Student's): t = 5.68, p < 0.0001
+- Groups defined by median split of `rolling_volatility_15m`: observations at or above the median → "high volatility", below → "low volatility". Outcome variable: absolute 1-minute Polymarket price change (`|poly_change_1m|`).
+- Larger absolute Polymarket updates occur during **low** volatility periods.
+- **Result:** High volatility drives prices to 0/1 extremes (ceiling/floor effect), leaving no room for further adjustment. Low volatility keeps prices in the uncertain mid-range (0.3–0.7) where larger updates remain possible.
 
 ### ML Efficiency Measurement
 
@@ -65,9 +66,9 @@ The full model's predictive power comes primarily from Polymarket's own price mo
 
 ## Key Visualizations
 
-### Cross-Correlation (CCF) — The 4-Hour Lag
+### Cross-Correlation (CCF) — The 3.5-Hour Lag (15-min CCF Refined)
 
-The CCF plot below shows how the correlation between BTC hourly returns and Polymarket price changes evolves across lags. The peak at **lag = 4 hours** is the central empirical finding of H2: Polymarket systematically reprices ~4 hours after BTC moves, not in real time.
+The CCF plot below shows how the correlation between BTC hourly returns and Polymarket price changes evolves across lags. The peak at **lag = 3.5 hours (210 min)** is the central empirical finding of H2: Polymarket systematically reprices ~3.5 hours after BTC moves, not in real time. The hourly CCF (shown) rounded this to 4h; the 15-minute robustness check resolves it to 210 min.
 
 ![CCF — BTC Return vs Polymarket Change](data/processed/plot_h2_ccf.png)
 
@@ -95,7 +96,8 @@ The ROC curves below visualize the efficiency measurement. The **0.2975 AUC gap*
 | BTC data | 1-minute Kraken OHLCV |
 | Missing btc_price | 0 |
 | Market cycles covered | ~6–13 complete cycles (each market 2–4 days) |
-| Hourly observations for CCF | 617 |
+| Hourly observations (hourly CCF) | 617 |
+| 15-min observations (15-min CCF) | ~2,471 |
 
 **Note on data scope:** The 26-day window is shorter than the originally proposed 3 months.
 However, statistical adequacy is better measured by the number of complete market cycles
@@ -154,7 +156,7 @@ Open notebooks in order on Google Colab:
 
 ---
 
-## Discussion — Practical Implications of the 4-Hour Lag
+## Discussion — Practical Implications of the ~3.5-Hour Lag
 
 ### What does the lag mean?
 When BTC crosses a prediction market threshold, Polymarket participants take approximately
