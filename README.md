@@ -203,7 +203,7 @@ exploitation impractical.
 
 This finding is consistent with the **adaptive market hypothesis** (Lo, 2004):
 markets are not statically efficient or inefficient — they reflect the capabilities
-and incentives of their current participant base. Polymarket's 4-hour lag will likely
+and incentives of their current participant base. Polymarket's 3.5-hour lag will likely
 compress as the platform matures and attracts more sophisticated liquidity providers.
 
 ---
@@ -214,7 +214,7 @@ compress as the platform matures and attracts more sophisticated liquidity provi
 
 - **Data window:** The dataset covers 26 days (April 9 – May 5, 2026), shorter than the originally planned 3 months. While the number of complete market cycles (6–13) and hourly observations (n=617) are statistically adequate for the tests performed, a longer window would capture different BTC volatility regimes and strengthen generalizability.
 
-- **Single asset:** All markets are Bitcoin-denominated. Whether the 4-hour lag generalizes to other cryptocurrency prediction markets (ETH, SOL) or non-crypto Polymarket categories is untested.
+- **Single asset:** All markets are Bitcoin-denominated. Whether the 3.5-hour lag generalizes to other cryptocurrency prediction markets (ETH, SOL) or non-crypto Polymarket categories is untested.
 
 - **API fidelity:** Polymarket price history is fetched at the maximum available fidelity (1-minute ticks), but some markets have sparse tick data — particularly short-lived markets with low trading activity. Sparse markets may underrepresent genuine price discovery.
 
