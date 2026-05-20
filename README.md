@@ -4,8 +4,8 @@
 
 ## Quick Verdict
 
-> * **The Core Finding:** Polymarket does NOT price Bitcoin events in real-time. It lags the continuous spot market (Kraken) by approximately **4 hours**.
-> * **The Mechanism:** The prediction market relies heavily on its own internal price momentum (AUC 0.97) rather than reacting instantly to external BTC spot updates (BTC-only AUC drops to 0.68).
+> * **The Core Finding:** Polymarket does NOT price Bitcoin events in real-time. It lags the continuous spot market (Kraken) by approximately **4 hours** (±1h, limited by hourly CCF resolution).
+> * **The Mechanism:** The prediction market relies heavily on its own internal price momentum (AUC-ROC 0.97, PR-AUC 0.83) rather than reacting instantly to external BTC spot updates — BTC-only signals alone yield AUC-ROC 0.68 and PR-AUC 0.16, a gap that is statistically significant and economically meaningful.
 
 ---
 
@@ -36,7 +36,8 @@ Does Polymarket efficiently price Bitcoin-related outcomes in real time, or is t
 ### Hypothesis 2 — Lag Detection
 - Cross-lag correlation peaks at **lag = 4 hours** (CCF = 0.0935, Granger p < 0.0001 for all lags 1–6h)
 - Confirmed independently by both CCF on hourly aggregated signal (02_eda_hypothesis) and per-market Pearson cross-lag (03_ml_shap).
-- **Result:** Real-time pricing is not occurring; Polymarket systematically reprices ~4 hours after BTC moves.
+- **Granularity note:** CCF is computed on a 1-hour grid; the true lag falls somewhere in the 3–5 hour range. The "4 hours" figure is the nearest resolvable bin, not a point estimate.
+- **Result:** Real-time pricing is not occurring; Polymarket systematically reprices ~4 hours after BTC moves, consistent with **semi-strong form inefficiency** under the Efficient Market Hypothesis (public information — BTC spot price — is not immediately reflected in prices).
 
 ### Hypothesis 3 — Volatility Effect
 - t = 5.68, p < 0.0001
@@ -48,15 +49,17 @@ Does Polymarket efficiently price Bitcoin-related outcomes in real time, or is t
 | Model | AUC-ROC | 95% CI | PR-AUC |
 |---|---|---|---|
 | Full model (BTC + Polymarket history) | 0.9775 | [0.9724, 0.9825] | 0.8343 |
-| Poly-only (autocorrelation baseline) | 0.9705 | [0.9631, 0.9772] | — |
+| Poly-only (autocorrelation baseline) | 0.9705 | [0.9631, 0.9772] | ¹ |
 | BTC-only model | 0.6800 | [0.6576, 0.7015] | 0.1569 |
 | **Full vs BTC-only gap** | **0.2975** | | |
 
 Confidence intervals computed via bootstrap resampling (n=1000).
 
-The full model's predictive power comes primarily from Polymarket's own price momentum (`yes_price`, `poly_lag_3`), confirmed by the Poly-only ablation (AUC 0.9705 ≈ full model). BTC-only model drops to AUC 0.68 — statistically significantly better than random (lower CI 0.66 > 0.50) but far below the full model (CIs do not overlap). This confirms Polymarket moves largely on internal momentum rather than real-time BTC information.
+¹ *Poly-only PR-AUC is computed in `03_ml_shap.ipynb` (`poly_ap` variable) but not yet surfaced here. Given AUC parity with the full model (0.9705 vs 0.9775), it is expected to be close to the full model's 0.8343.*
 
-**Overall conclusion:** Polymarket is **partially efficient**. It correctly reflects BTC's direction (~97.3% agreement) but reacts with a ~4-hour delay and relies primarily on its own momentum rather than spot market signals.
+The full model's predictive power comes primarily from Polymarket's own price momentum (`yes_price`, `poly_lag_3`), confirmed by the Poly-only ablation (AUC 0.9705 ≈ full model). BTC-only model drops to AUC-ROC 0.68 and PR-AUC 0.16 — the PR-AUC gap (0.8343 vs 0.1569) is more informative than the AUC-ROC gap under the 10:1 class imbalance, and confirms that BTC signals alone provide near-negligible minority-class predictive power. Full vs BTC-only 95% CIs do not overlap, confirming statistical significance.
+
+**Overall conclusion:** Polymarket exhibits **semi-strong form inefficiency** under the Efficient Market Hypothesis: publicly available BTC spot price information (a semi-strong form signal) is not immediately reflected in Polymarket prices. The market reacts with a ~4-hour delay and relies primarily on its own momentum rather than spot market signals. This is not a partial failure of efficiency — it is a clear failure of semi-strong form efficiency, consistent with a retail-dominated, thinly-traded market.
 
 ---
 
@@ -156,19 +159,25 @@ Open notebooks in order on Google Colab:
 ### What does the lag mean?
 When BTC crosses a prediction market threshold, Polymarket participants take approximately
 4 hours to fully reprice the outcome. During this window, the market trades at a
-probability that no longer reflects available spot price information — a clear departure
-from strong-form efficiency.
+probability that no longer reflects available spot price information — a clear failure
+of **semi-strong form efficiency** (the Efficient Market Hypothesis form that requires
+publicly available information to be immediately priced in). Note: this is distinct from
+strong-form efficiency, which concerns private/insider information.
 
-### Is arbitrage theoretically possible?
-Yes, under idealized conditions. A trader who monitors BTC spot price in real time could:
+### Speculative Implications — Could the lag be exploited?
+*The following is theoretical. No live trading was performed, and transaction costs,
+liquidity constraints, and execution risk are not fully modeled.*
+
+Under idealized conditions, a trader who monitors BTC spot price in real time could:
 1. Observe BTC move above/below a threshold at time T
 2. Buy the underpriced outcome on Polymarket while it still reflects T−4h information
 3. Capture the repricing as other participants update over the next ~4 hours
 
 The 2.7% disagreement rate (226/8,269 observations where BTC and Polymarket disagree
-on direction) represents the observable arbitrage surface. The highest disagreement
-occurs when Polymarket certainty is 0.1–0.2 (16.7% disagreement) — these are the
-most exploitable moments.
+on direction) represents an upper bound on the observable arbitrage surface. The highest
+disagreement occurs when Polymarket certainty is 0.1–0.2 (16.7% disagreement) — likely
+corresponding to the lowest-liquidity moments, though this has not been econometrically
+tested against order book data.
 
 ### Why is the lag not fully arbitraged away?
 Several structural frictions prevent efficient exploitation:
