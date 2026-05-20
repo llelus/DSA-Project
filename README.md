@@ -4,7 +4,7 @@
 
 ## Quick Verdict
 
-> * **The Core Finding:** Polymarket does NOT price Bitcoin events in real-time. It lags the continuous spot market (Kraken) by approximately **4 hours** (±1h, limited by hourly CCF resolution).
+> * **The Core Finding:** Polymarket does NOT price Bitcoin events in real-time. It lags the continuous spot market (Kraken) by approximately **3.5 hours** (210 min, refined via 15-min CCF; hourly CCF rounded to 4h).
 > * **The Mechanism:** The prediction market relies heavily on its own internal price momentum (AUC-ROC 0.97, PR-AUC 0.83) rather than reacting instantly to external BTC spot updates — BTC-only signals alone yield AUC-ROC 0.68 and PR-AUC 0.16, a gap that is statistically significant and economically meaningful.
 
 ---
@@ -34,10 +34,10 @@ Does Polymarket efficiently price Bitcoin-related outcomes in real time, or is t
 - **Scope note:** H1 is a validity check, not an efficiency test. It confirms that Polymarket prices carry real information rather than noise — a prerequisite for H2 and H3. The efficiency question (does repricing happen *in real time*?) is answered by H2.
 
 ### Hypothesis 2 — Lag Detection
-- Cross-lag correlation peaks at **lag = 4 hours** (CCF = 0.0935, Granger p < 0.0001 for all lags 1–6h)
-- Confirmed independently by both CCF on hourly aggregated signal (02_eda_hypothesis) and per-market Pearson cross-lag (03_ml_shap).
-- **Granularity note:** CCF is computed on a 1-hour grid; the true lag falls somewhere in the 3–5 hour range. The "4 hours" figure is the nearest resolvable bin, not a point estimate.
-- **Result:** Real-time pricing is not occurring; Polymarket systematically reprices ~4 hours after BTC moves, consistent with **semi-strong form inefficiency** under the Efficient Market Hypothesis (public information — BTC spot price — is not immediately reflected in prices).
+- Hourly CCF peaks at **lag = 4 hours** (CCF = 0.0935); refined via 15-minute CCF to **lag = 3.5 hours (210 min)** (CCF = 0.0513, exceeds 95% CI). Granger p < 0.0001 for all lags 1–6h.
+- Confirmed independently by both CCF on aggregated signal (02_eda_hypothesis) and per-market Pearson cross-lag (03_ml_shap).
+- **Granularity note:** The "4 hours" figure from hourly CCF was the nearest resolvable bin. The 15-minute robustness check refines this to ~3.5 hours (±15 min).
+- **Result:** Real-time pricing is not occurring; Polymarket systematically reprices ~3.5 hours after BTC moves, consistent with **semi-strong form inefficiency** under the Efficient Market Hypothesis (public information — BTC spot price — is not immediately reflected in prices).
 
 ### Hypothesis 3 — Volatility Effect
 - t = 5.68, p < 0.0001
@@ -59,7 +59,7 @@ Confidence intervals computed via bootstrap resampling (n=1000).
 
 The full model's predictive power comes primarily from Polymarket's own price momentum (`yes_price`, `poly_lag_3`), confirmed by the Poly-only ablation (AUC 0.9705 ≈ full model). BTC-only model drops to AUC-ROC 0.68 and PR-AUC 0.16 — the PR-AUC gap (0.8343 vs 0.1569) is more informative than the AUC-ROC gap under the 10:1 class imbalance, and confirms that BTC signals alone provide near-negligible minority-class predictive power. Full vs BTC-only 95% CIs do not overlap, confirming statistical significance.
 
-**Overall conclusion:** Polymarket exhibits **semi-strong form inefficiency** under the Efficient Market Hypothesis: publicly available BTC spot price information (a semi-strong form signal) is not immediately reflected in Polymarket prices. The market reacts with a ~4-hour delay and relies primarily on its own momentum rather than spot market signals. This is not a partial failure of efficiency — it is a clear failure of semi-strong form efficiency, consistent with a retail-dominated, thinly-traded market.
+**Overall conclusion:** Polymarket exhibits **semi-strong form inefficiency** under the Efficient Market Hypothesis: publicly available BTC spot price information (a semi-strong form signal) is not immediately reflected in Polymarket prices. The market reacts with a **~3.5-hour delay** (210 min, confirmed at ±15 min resolution) and relies primarily on its own momentum rather than spot market signals. This is not a partial failure of efficiency — it is a clear failure of semi-strong form efficiency, consistent with a retail-dominated, thinly-traded market.
 
 ---
 
@@ -158,7 +158,7 @@ Open notebooks in order on Google Colab:
 
 ### What does the lag mean?
 When BTC crosses a prediction market threshold, Polymarket participants take approximately
-4 hours to fully reprice the outcome. During this window, the market trades at a
+3.5 hours (210 min) to fully reprice the outcome. During this window, the market trades at a
 probability that no longer reflects available spot price information — a clear failure
 of **semi-strong form efficiency** (the Efficient Market Hypothesis form that requires
 publicly available information to be immediately priced in). Note: this is distinct from
@@ -186,7 +186,7 @@ Several structural frictions prevent efficient exploitation:
   positions move the price and erode the edge before it is captured.
 - **Transaction costs**: Polymarket operates on-chain (Polygon). Gas fees and
   USDC bridging costs reduce net profit on small mispricings.
-- **Market lifetime**: These markets expire in 2–4 days. A 4-hour lag consumes
+- **Market lifetime**: These markets expire in 2–4 days. A 3.5-hour lag consumes
   a significant fraction of remaining market life, compressing the holding window.
 - **Participant composition**: Polymarket's Bitcoin market participants are largely
   retail traders without automated BTC monitoring — the lag exists precisely because
@@ -218,7 +218,7 @@ compress as the platform matures and attracts more sophisticated liquidity provi
 
 - **Target imbalance:** The ML target (yes_price increase in the next tick) has a 10:1 class imbalance. While mitigated via `class_weight="balanced"` and threshold optimization, the imbalance limits the interpretability of absolute precision/recall figures for the minority class.
 
-- **Lag measurement granularity:** The CCF-based lag estimate is limited to 1-hour resolution. The true repricing delay could be finer-grained (e.g., 2.5 hours) but cannot be resolved at hourly aggregation.
+- **Lag measurement granularity:** The hourly CCF estimate (4h) was refined to **3.5 hours (210 min)** via a 15-minute robustness check. This is the finest resolution achievable without minute-level CCF, which would require handling much larger autocorrelation structures.
 
 ### Future extensions
 
