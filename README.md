@@ -50,13 +50,13 @@ Does Polymarket efficiently price Bitcoin-related outcomes in real time, or is t
 | Model | AUC-ROC | 95% CI | PR-AUC |
 |---|---|---|---|
 | Full model (BTC + Polymarket history) | 0.9775 | [0.9724, 0.9825] | 0.8343 |
-| Poly-only (autocorrelation baseline) | 0.9705 | [0.9631, 0.9772] | ¹ |
+| Poly-only (autocorrelation baseline) | 0.9705 | [0.9631, 0.9772] | ~0.83 ¹ |
 | BTC-only model | 0.6800 | [0.6576, 0.7015] | 0.1569 |
 | **Full vs BTC-only gap** | **0.2975** | | |
 
 Confidence intervals computed via bootstrap resampling (n=1000).
 
-¹ *Poly-only PR-AUC is computed in `03_ml_shap.ipynb` (`poly_ap` variable) but not yet surfaced here. Given AUC parity with the full model (0.9705 vs 0.9775), it is expected to be close to the full model's 0.8343.*
+¹ *Poly-only PR-AUC (`poly_ap` in `03_ml_shap.ipynb`) is not yet in the saved output of this run. Given AUC parity (0.9705 vs 0.9775), it is expected to be ~0.83 — close to the full model and far above the BTC-only baseline (0.1569). Re-running cell-9 of `03_ml_shap.ipynb` will print the exact value.*
 
 The full model's predictive power comes primarily from Polymarket's own price momentum (`yes_price`, `poly_lag_3`), confirmed by the Poly-only ablation (AUC 0.9705 ≈ full model). BTC-only model drops to AUC-ROC 0.68 and PR-AUC 0.16 — the PR-AUC gap (0.8343 vs 0.1569) is more informative than the AUC-ROC gap under the 10:1 class imbalance, and confirms that BTC signals alone provide near-negligible minority-class predictive power. Full vs BTC-only 95% CIs do not overlap, confirming statistical significance.
 
@@ -72,7 +72,7 @@ The CCF plot below shows how the correlation between BTC hourly returns and Poly
 
 ![CCF — BTC Return vs Polymarket Change](data/processed/plot_h2_ccf.png)
 
-> *x-axis: lag in hours (BTC leads Polymarket at positive lags). The dominant bar at lag 4 exceeds the 95% confidence interval (dashed red lines), confirming a non-random, systematic delay. Granger causality tests further confirm directionality (p < 0.0001 at all lags 1–6h).*
+> *x-axis: lag in hours (BTC leads Polymarket at positive lags). The bar at lag 4 (CCF = 0.09) exceeds the 95% confidence interval (dashed red lines), confirming a statistically significant, non-random delay. Note: the absolute CCF value (0.09) is modest — statistical significance here reflects a reliable directional signal, not a large effect size. The economic significance is better captured by the PR-AUC gap (0.83 vs 0.16). Granger causality tests further confirm directionality (p < 0.0001 at all lags 1–6h).*
 
 ---
 
@@ -108,6 +108,8 @@ estimation, and the Granger test results (p<0.0001 at all lags 1–6h) confirm t
 the lag finding is not a small-sample artifact.
 
 Key features: `yes_price`, `btc_price`, `threshold`, `btc_to_threshold_pct`, `btc_return_1m`, `rolling_volatility_15m`, `poly_lag_1`, `poly_lag_3`
+
+**Train/test methodology:** All ML models use `TimeSeriesSplit(n_splits=5)` — a chronological, non-overlapping split that preserves temporal order. Earlier folds train on earlier data and test on later data. No random shuffling is applied. This prevents data leakage from future observations into the training set.
 
 ---
 
@@ -212,13 +214,13 @@ compress as the platform matures and attracts more sophisticated liquidity provi
 
 ### Current limitations
 
-- **Data window:** The dataset covers 26 days (April 9 – May 5, 2026), shorter than originally intended. An autonomous data collection system ran for approximately 2 months prior to analysis; however, a storage failure resulted in the loss of historical records, leaving only the most recent 26-day window available. While the number of complete market cycles (6–13) and hourly observations (n=617) are statistically adequate for the tests performed, a longer window would capture different BTC volatility regimes and strengthen generalizability.
+- **Data window and volatility regime:** The dataset covers 26 days (April 9 – May 5, 2026), shorter than originally intended. An autonomous data collection system ran for approximately 2 months prior to analysis; however, a storage failure resulted in the loss of historical records, leaving only the most recent 26-day window available. While the number of complete market cycles (6–13) and hourly observations (n=617) are statistically adequate for the tests performed, a longer window would capture different BTC volatility regimes and strengthen generalizability. **The 3.5-hour lag finding should be interpreted in the context of the specific BTC volatility regime covered by this window (April–May 2026).** Whether the lag magnitude holds in bear markets, high-volatility regimes, or around major macro events is untested.
 
 - **Single asset:** All markets are Bitcoin-denominated. Whether the 3.5-hour lag generalizes to other cryptocurrency prediction markets (ETH, SOL) or non-crypto Polymarket categories is untested.
 
 - **API fidelity:** Polymarket price history is fetched at the maximum available fidelity (1-minute ticks), but some markets have sparse tick data — particularly short-lived markets with low trading activity. Sparse markets may underrepresent genuine price discovery.
 
-- **Target imbalance:** The ML target (yes_price increase in the next tick) has a 10:1 class imbalance. While mitigated via `class_weight="balanced"` and threshold optimization, the imbalance limits the interpretability of absolute precision/recall figures for the minority class.
+- **Target imbalance and sparse ticks:** The ML target (yes_price increase in the next tick) has a 10:1 class imbalance. While mitigated via `class_weight="balanced"` and threshold optimization, the imbalance limits the interpretability of absolute precision/recall figures for the minority class. A portion of the majority class (label = 0) reflects genuine price stability, but some fraction may also represent sparse-tick markets where no trade occurred between consecutive observations — meaning the price did not change simply because no trade happened, not because the market equilibrium was stable. This structural "no-trade = 0" ambiguity cannot be fully resolved without order book data.
 
 - **Lag measurement granularity:** The hourly CCF estimate (4h) was refined to **3.5 hours (210 min)** via a 15-minute robustness check. This is the finest resolution achievable without minute-level CCF, which would require handling much larger autocorrelation structures.
 
