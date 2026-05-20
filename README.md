@@ -2,6 +2,13 @@
 
 **Sabanci University | DSA-210 | Spring 2026**
 
+## Quick Verdict
+
+> * **The Core Finding:** Polymarket does NOT price Bitcoin events in real-time. It lags the continuous spot market (Kraken) by approximately **4 hours**.
+> * **The Mechanism:** The prediction market relies heavily on its own internal price momentum (AUC 0.97) rather than reacting instantly to external BTC spot updates (BTC-only AUC drops to 0.68).
+
+---
+
 ## Motivation
 
 Prediction markets are often cited as efficient aggregators of dispersed information — in theory, they should price outcomes as quickly as any other market. Polymarket, the largest on-chain prediction market, runs binary Bitcoin price markets that resolve within 2–4 days. If Polymarket is truly efficient, its probabilities should update in near real-time as BTC spot prices move.
@@ -50,6 +57,28 @@ Confidence intervals computed via bootstrap resampling (n=1000).
 The full model's predictive power comes primarily from Polymarket's own price momentum (`yes_price`, `poly_lag_3`), confirmed by the Poly-only ablation (AUC 0.9705 ≈ full model). BTC-only model drops to AUC 0.68 — statistically significantly better than random (lower CI 0.66 > 0.50) but far below the full model (CIs do not overlap). This confirms Polymarket moves largely on internal momentum rather than real-time BTC information.
 
 **Overall conclusion:** Polymarket is **partially efficient**. It correctly reflects BTC's direction (~97.3% agreement) but reacts with a ~4-hour delay and relies primarily on its own momentum rather than spot market signals.
+
+---
+
+## Key Visualizations
+
+### Cross-Correlation (CCF) — The 4-Hour Lag
+
+The CCF plot below shows how the correlation between BTC hourly returns and Polymarket price changes evolves across lags. The peak at **lag = 4 hours** is the central empirical finding of H2: Polymarket systematically reprices ~4 hours after BTC moves, not in real time.
+
+![CCF — BTC Return vs Polymarket Change](data/processed/plot_h2_ccf.png)
+
+> *x-axis: lag in hours (BTC leads Polymarket at positive lags). The dominant bar at lag 4 exceeds the 95% confidence interval (dashed red lines), confirming a non-random, systematic delay. Granger causality tests further confirm directionality (p < 0.0001 at all lags 1–6h).*
+
+---
+
+### ROC Curve Comparison — Full Model vs BTC-Only
+
+The ROC curves below visualize the efficiency measurement. The **0.2975 AUC gap** between the full model and the BTC-only model is the quantitative proof that Polymarket prices are driven by internal momentum rather than real-time BTC signals.
+
+![ROC Curve — Full Model vs BTC-Only](data/processed/plot_roc_btconly.png)
+
+> *The full model (BTC + Polymarket history) achieves AUC 0.977. Removing all Polymarket features collapses AUC to 0.680 — still above random (lower CI 0.66 > 0.50), but far below the full model (CIs do not overlap). The Poly-only ablation (AUC 0.970 ≈ full model) confirms that the full model's power comes from Polymarket's own autocorrelation, not from BTC signals.*
 
 ---
 
