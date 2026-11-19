@@ -1,0 +1,12 @@
+# Python / Jupyter
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Derived data: rebuilt from data/raw by src.dataset.load_panel()
+data/processed/*.parquet
+
+# Local environments
+.venv/
+venv/
+.env
