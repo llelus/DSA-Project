@@ -95,8 +95,51 @@ def fetch_markets_page(session, day_start, day_end, offset, limit=500):
     return r.json()
 
 
+def fetch_day_raw(session, day_start, day_end, limit=500, max_pages=400):
+    """Every closed market (any topic) whose end date falls in one window.
+
+    Pages until the API returns an empty page. The offset advances by the
+    number of rows actually received, because Gamma may cap the page size
+    below `limit` — stopping on a short page would read only the first page.
+    """
+    out, offset = [], 0
+    for page in range(max_pages):
+        batch = fetch_markets_page(session, day_start, day_end, offset, limit)
+        if not batch:
+            return out
+        if page == 0:
+            ends = pd.to_datetime([b.get("endDate") for b in batch], utc=True, errors="coerce")
+            near = (ends >= day_start - pd.Timedelta(days=1)) & (ends <= day_end + pd.Timedelta(days=1))
+            if near.sum() == 0:
+                raise RuntimeError("Gamma API ignored end_date_min/max; "
+                                   "check the parameter names before collecting.")
+        out.extend(batch)
+        offset += len(batch)
+    print(f"WARNING {pd.Timestamp(day_start).date()}: hit max_pages, day may be incomplete")
+    return out
+
+
+def question_templates(raw, keywords=("bitcoin", "btc")):
+    """Count question wordings of crypto markets with numbers/months masked.
+
+    Used to see how Polymarket currently phrases BTC markets when
+    MARKET_PATTERN matches nothing.
+    """
+    months = (r"\b(January|February|March|April|May|June|July|August|September|October|"
+              r"November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\b")
+    counts = {}
+    for m in raw:
+        q = (m.get("question") or "").strip()
+        if not any(k in q.lower() for k in keywords):
+            continue
+        t = re.sub(months, "<MON>", q, flags=re.I)
+        t = re.sub(r"\$?\d[\d,]*(?:\.\d+)?", "<N>", t)
+        counts[t] = counts.get(t, 0) + 1
+    return pd.Series(counts, dtype=int).sort_values(ascending=False)
+
+
 def fetch_markets(start=config.START_DATE, end=config.END_DATE, session=None,
-                  limit=500, max_pages=200, verbose=True):
+                  limit=500, max_pages=400, verbose=True):
     """All closed BTC threshold markets whose expiry lies in [start, end).
 
     Queried one UTC day at a time with the Gamma end-date filter, so the
@@ -106,32 +149,26 @@ def fetch_markets(start=config.START_DATE, end=config.END_DATE, session=None,
     s = session or make_session()
     days = pd.date_range(pd.Timestamp(start, tz="UTC"), pd.Timestamp(end, tz="UTC"),
                          freq="D", inclusive="left")
-    records, seen = [], set()
+    records, seen, hinted = [], set(), False
     for d0 in days:
         d1 = d0 + pd.Timedelta(days=1)
+        raw = fetch_day_raw(s, d0, d1, limit, max_pages)
         n_day = 0
-        for page in range(max_pages):
-            batch = fetch_markets_page(s, d0, d1, page * limit, limit)
-            if not batch:
-                break
-            if page == 0:
-                ends = pd.to_datetime([b.get("endDate") for b in batch], utc=True, errors="coerce")
-                in_window = ((ends >= d0 - pd.Timedelta(days=1)) & (ends <= d1 + pd.Timedelta(days=1))).sum()
-                if in_window == 0:
-                    raise RuntimeError("Gamma API ignored end_date_min/max; "
-                                       "check the parameter names before collecting.")
-            for m in batch:
-                rec = parse_market(m)
-                if rec and rec["condition_id"] not in seen and d0 <= rec["market_end"] < d1:
-                    seen.add(rec["condition_id"])
-                    records.append(rec)
-                    n_day += 1
-            if len(batch) < limit:
-                break
-        else:
-            print(f"WARNING {d0.date()}: hit max_pages, day may be incomplete")
+        for m in raw:
+            rec = parse_market(m)
+            if rec and rec["condition_id"] not in seen and d0 <= rec["market_end"] < d1:
+                seen.add(rec["condition_id"])
+                records.append(rec)
+                n_day += 1
         if verbose:
-            print(f"{d0.date()}: {n_day} markets")
+            print(f"{d0.date()}: {len(raw):,} closed markets scanned, {n_day} BTC threshold markets")
+        if n_day == 0 and not hinted:
+            tmpl = question_templates(raw)
+            if len(tmpl):
+                hinted = True
+                print("  No match. Most common Bitcoin wordings that day:")
+                for t, c in tmpl.head(8).items():
+                    print(f"    {c:5d} × {t}")
     df = pd.DataFrame(records)
     if not df.empty:
         df = df.sort_values(["market_end", "strike"]).reset_index(drop=True)
