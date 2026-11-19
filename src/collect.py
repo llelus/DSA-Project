@@ -131,13 +131,20 @@ def resolve_tag_id(session, slug=config.GAMMA_TAG_SLUG):
 
 
 def market_tags(session, condition_id=config.REFERENCE_CONDITION_ID):
-    """Tags attached to one known market (and its event): which tag to filter on."""
-    r = session.get(GAMMA_MARKETS, params={"condition_ids": condition_id, "include_tag": "true"},
-                    timeout=30)
+    """Tags attached to one known market (and its event): which tag to filter on.
+
+    Informational only: returns an empty frame (with a warning) instead of
+    raising, so the probe can continue.
+    """
+    # Gamma lists only open markets unless closed=true is passed.
+    r = session.get(GAMMA_MARKETS, params={"condition_ids": condition_id, "closed": "true",
+                                           "include_tag": "true"}, timeout=30)
     r.raise_for_status()
     markets = r.json()
     if not markets:
-        raise GammaQueryError(f"Reference market {condition_id} not found.")
+        print(f"WARNING: reference market {condition_id} not returned by Gamma; "
+              "cannot show its tags (continuing).")
+        return pd.DataFrame(columns=["id", "slug", "label"])
     m = markets[0]
     tags = list(m.get("tags") or [])
     for ev in m.get("events") or []:
