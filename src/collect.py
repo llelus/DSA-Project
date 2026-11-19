@@ -95,27 +95,65 @@ def fetch_markets_page(session, day_start, day_end, offset, limit=500):
     return r.json()
 
 
-def fetch_day_raw(session, day_start, day_end, limit=500, max_pages=400):
-    """Every closed market (any topic) whose end date falls in one window.
+class _OffsetLimit(Exception):
+    """Gamma refused a deep offset (it caps pagination around offset 2,000)."""
 
-    Pages until the API returns an empty page. The offset advances by the
-    number of rows actually received, because Gamma may cap the page size
-    below `limit` — stopping on a short page would read only the first page.
+
+def _fetch_window(session, w0, w1, limit, max_pages):
+    """Page through one end-date window until an empty page.
+
+    The offset advances by rows actually received, because Gamma may cap the
+    page size below `limit` (stopping on a short page would read one page only).
     """
     out, offset = [], 0
     for page in range(max_pages):
-        batch = fetch_markets_page(session, day_start, day_end, offset, limit)
+        try:
+            batch = fetch_markets_page(session, w0, w1, offset, limit)
+        except requests.HTTPError as e:
+            code = getattr(e.response, "status_code", None)
+            if offset > 0 and code in (400, 422):
+                raise _OffsetLimit(offset) from e
+            raise
         if not batch:
             return out
         if page == 0:
             ends = pd.to_datetime([b.get("endDate") for b in batch], utc=True, errors="coerce")
-            near = (ends >= day_start - pd.Timedelta(days=1)) & (ends <= day_end + pd.Timedelta(days=1))
+            near = (ends >= w0 - pd.Timedelta(days=1)) & (ends <= w1 + pd.Timedelta(days=1))
             if near.sum() == 0:
                 raise RuntimeError("Gamma API ignored end_date_min/max; "
                                    "check the parameter names before collecting.")
         out.extend(batch)
         offset += len(batch)
-    print(f"WARNING {pd.Timestamp(day_start).date()}: hit max_pages, day may be incomplete")
+    raise _OffsetLimit(offset)
+
+
+def fetch_window_raw(session, w0, w1, limit=500, max_pages=400,
+                     min_window=pd.Timedelta(minutes=1)):
+    """All closed markets ending in [w0, w1]; halves the window when the API
+    refuses to paginate deep enough, so busy periods are still read completely."""
+    try:
+        return _fetch_window(session, w0, w1, limit, max_pages)
+    except _OffsetLimit:
+        if w1 - w0 <= min_window:
+            raise RuntimeError(f"Too many markets end within {w0}–{w1} to page through.")
+        mid = (w0 + (w1 - w0) / 2).floor("s")
+        return (fetch_window_raw(session, w0, mid, limit, max_pages, min_window)
+                + fetch_window_raw(session, mid, w1, limit, max_pages, min_window))
+
+
+def fetch_day_raw(session, day_start, day_end, limit=500, max_pages=400):
+    """Every closed market (any topic) whose end date falls in [day_start, day_end).
+
+    Queried hour by hour (a busy day has more markets than Gamma lets you
+    page through in one query), de-duplicated because window edges overlap.
+    """
+    out, seen = [], set()
+    for h0 in pd.date_range(day_start, day_end, freq="h", inclusive="left"):
+        for m in fetch_window_raw(session, h0, min(h0 + pd.Timedelta(hours=1), day_end), limit, max_pages):
+            key = m.get("conditionId") or m.get("id")
+            if key not in seen:
+                seen.add(key)
+                out.append(m)
     return out
 
 
