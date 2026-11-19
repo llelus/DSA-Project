@@ -87,25 +87,39 @@ def parse_market(m):
     }
 
 
-def fetch_markets_page(session, day_start, day_end, offset, limit=500):
+def fetch_markets_page(session, day_start, day_end, offset, limit=500, ordered=True):
     params = {"closed": "true", "limit": limit, "offset": offset,
               "end_date_min": _iso(day_start), "end_date_max": _iso(day_end)}
+    if ordered:
+        params.update(order="endDate", ascending="true")
     r = session.get(GAMMA_MARKETS, params=params, timeout=30)
     r.raise_for_status()
     return r.json()
+
+
+class GammaQueryError(RuntimeError):
+    """The Gamma API does not filter/order the way the collector relies on."""
 
 
 class _OffsetLimit(Exception):
     """Gamma refused a deep offset (it caps pagination around offset 2,000)."""
 
 
-def _fetch_window(session, w0, w1, limit, max_pages):
-    """Page through one end-date window until an empty page.
+def _end_dates(batch):
+    return pd.to_datetime([b.get("endDate") for b in batch], utc=True, errors="coerce")
 
-    The offset advances by rows actually received, because Gamma may cap the
-    page size below `limit` (stopping on a short page would read one page only).
+
+def _fetch_window(session, w0, w1, limit, max_pages):
+    """Markets ending in [w0, w1], scanned in endDate order from w0.
+
+    Does not trust end_date_max (Gamma was observed to return >2,000 markets
+    for a one-minute window): it keeps only rows inside the window and stops
+    as soon as the ordered scan passes w1. Ordering and end_date_min are
+    verified on every page, so a silently ignored parameter raises instead of
+    producing a wrong dataset. The offset advances by rows actually received,
+    because Gamma may cap the page size below `limit`.
     """
-    out, offset = [], 0
+    out, offset, prev_last = [], 0, None
     for page in range(max_pages):
         try:
             batch = fetch_markets_page(session, w0, w1, offset, limit)
@@ -116,15 +130,48 @@ def _fetch_window(session, w0, w1, limit, max_pages):
             raise
         if not batch:
             return out
-        if page == 0:
-            ends = pd.to_datetime([b.get("endDate") for b in batch], utc=True, errors="coerce")
-            near = (ends >= w0 - pd.Timedelta(days=1)) & (ends <= w1 + pd.Timedelta(days=1))
-            if near.sum() == 0:
-                raise RuntimeError("Gamma API ignored end_date_min/max; "
-                                   "check the parameter names before collecting.")
-        out.extend(batch)
+        ends = _end_dates(batch)
+        e = ends[ends.notna()]
+        if len(e):
+            if (np.diff(e.asi8) < 0).any() or (prev_last is not None and e[0] < prev_last):
+                raise GammaQueryError(
+                    f"Gamma did not return markets ordered by endDate (window {w0}–{w1}, "
+                    f"offset {offset}); order=endDate&ascending=true is not honoured.")
+            if page == 0 and e[0] < w0 - pd.Timedelta(minutes=1):
+                raise GammaQueryError(
+                    f"Gamma ignored end_date_min: first endDate {e[0]} is before window start {w0}.")
+            prev_last = e[-1]
+        out.extend(b for b, t in zip(batch, ends) if pd.notna(t) and w0 <= t <= w1)
+        if len(e) and e[-1] > w1:
+            return out                       # the ordered scan has passed the window
         offset += len(batch)
     raise _OffsetLimit(offset)
+
+
+def diagnose_gamma(session, day, hour=12):
+    """Print how Gamma treats the end-date filter and ordering for one hour.
+
+    Run from the probe cell; the output tells whether the collector's
+    assumptions hold before a long download starts.
+    """
+    w0 = pd.Timestamp(day).tz_convert("UTC") if pd.Timestamp(day).tzinfo else pd.Timestamp(day, tz="UTC")
+    w0 = w0.normalize() + pd.Timedelta(hours=hour)
+    w1 = w0 + pd.Timedelta(hours=1)
+    rows = {}
+    for ordered in (False, True):
+        batch = fetch_markets_page(session, w0, w1, 0, 500, ordered=ordered)
+        ends = _end_dates(batch)
+        e = ends[ends.notna()]
+        rows["ordered by endDate" if ordered else "default order"] = {
+            "rows (page size)": len(batch),
+            "min endDate": e.min() if len(e) else None,
+            "max endDate": e.max() if len(e) else None,
+            "share inside window": float(((e >= w0) & (e <= w1)).mean()) if len(e) else None,
+            "sorted ascending": bool((np.diff(e.asi8) >= 0).all()) if len(e) > 1 else None,
+        }
+    print(f"Gamma check for window {w0} – {w1}:")
+    print(pd.DataFrame(rows).to_string())
+    return rows
 
 
 def fetch_window_raw(session, w0, w1, limit=500, max_pages=400,
