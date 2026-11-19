@@ -31,6 +31,13 @@ END_DATE = "2026-11-01"
 MARKET_PATTERN = r"^Bitcoin above \$?([\d,]+(?:\.\d+)?) on (.+?)\?$"
 MAX_MARKET_HOURS = 3          # keep short-lived (hourly) markets only
 PRICE_FIDELITY_MIN = 1        # requested Polymarket price-history resolution
+# Gamma queries are restricted to this tag: thousands of unrelated markets share
+# the same exact endDate, more than the API lets you page through.
+GAMMA_TAG_SLUG = "bitcoin"
+GAMMA_TAG_ID = None           # set an integer to skip slug lookup (see notebook 01, step 1)
+# A known v1 market ("Bitcoin above 71,600 on April 9, 4PM ET?") used to show
+# which tags Polymarket attaches to this market series.
+REFERENCE_CONDITION_ID = "0xea542d6cc50e2671208f0c6d35f4b5c94e6bfe5b81e2eb07d72d9fa644f7a6f0"
 
 # ── BTC spot data ────────────────────────────────────────────────────────────
 BTC_SYMBOL = "BTCUSDT"        # Binance spot, 1-minute klines (data.binance.vision)

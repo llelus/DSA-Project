@@ -23,7 +23,8 @@ from urllib3.util.retry import Retry
 
 from . import config
 
-GAMMA_MARKETS = "https://gamma-api.polymarket.com/markets"
+GAMMA_BASE = "https://gamma-api.polymarket.com"
+GAMMA_MARKETS = f"{GAMMA_BASE}/markets"
 CLOB_HISTORY = "https://clob.polymarket.com/prices-history"
 BINANCE_DAILY = ("https://data.binance.vision/data/spot/daily/klines/"
                  "{sym}/1m/{sym}-1m-{day}.zip")
@@ -87,11 +88,13 @@ def parse_market(m):
     }
 
 
-def fetch_markets_page(session, day_start, day_end, offset, limit=500, ordered=True):
+def fetch_markets_page(session, day_start, day_end, offset, limit=500, ordered=True, tag_id=None):
     params = {"closed": "true", "limit": limit, "offset": offset,
               "end_date_min": _iso(day_start), "end_date_max": _iso(day_end)}
     if ordered:
         params.update(order="endDate", ascending="true")
+    if tag_id is not None:
+        params["tag_id"] = int(tag_id)
     r = session.get(GAMMA_MARKETS, params=params, timeout=30)
     r.raise_for_status()
     return r.json()
@@ -99,6 +102,63 @@ def fetch_markets_page(session, day_start, day_end, offset, limit=500, ordered=T
 
 class GammaQueryError(RuntimeError):
     """The Gamma API does not filter/order the way the collector relies on."""
+
+
+# ── Polymarket: tags ─────────────────────────────────────────────────────────
+# Thousands of markets (all assets, 5/15-minute and hourly series) share the
+# same exact endDate, more than Gamma lets you page through (offset cap ~2,000).
+# Restricting the query to the Bitcoin tag keeps every window small.
+def resolve_tag_id(session, slug=config.GAMMA_TAG_SLUG):
+    """Numeric Gamma tag id for a tag slug (config.GAMMA_TAG_ID overrides)."""
+    if config.GAMMA_TAG_ID is not None:
+        return int(config.GAMMA_TAG_ID)
+    r = session.get(f"{GAMMA_BASE}/tags/slug/{slug}", timeout=30)
+    if r.status_code == 200:
+        data = r.json()
+        if isinstance(data, dict) and data.get("id") is not None:
+            return int(data["id"])
+    for offset in range(0, 20_000, 500):                     # fallback: scan the tag list
+        r = session.get(f"{GAMMA_BASE}/tags", params={"limit": 500, "offset": offset}, timeout=30)
+        r.raise_for_status()
+        tags = r.json()
+        if not tags:
+            break
+        for t in tags:
+            if str(t.get("slug", "")).lower() == slug.lower():
+                return int(t["id"])
+    raise GammaQueryError(f"Tag '{slug}' not found; set GAMMA_TAG_ID in src/config.py "
+                          "(see market_tags() output in notebook 01).")
+
+
+def market_tags(session, condition_id=config.REFERENCE_CONDITION_ID):
+    """Tags attached to one known market (and its event): which tag to filter on."""
+    r = session.get(GAMMA_MARKETS, params={"condition_ids": condition_id, "include_tag": "true"},
+                    timeout=30)
+    r.raise_for_status()
+    markets = r.json()
+    if not markets:
+        raise GammaQueryError(f"Reference market {condition_id} not found.")
+    m = markets[0]
+    tags = list(m.get("tags") or [])
+    for ev in m.get("events") or []:
+        tags += ev.get("tags") or []
+        if not ev.get("tags") and ev.get("slug"):             # event payload without tags
+            re_ = session.get(f"{GAMMA_BASE}/events", params={"slug": ev["slug"]}, timeout=30)
+            if re_.status_code == 200 and re_.json():
+                tags += re_.json()[0].get("tags") or []
+    df = pd.DataFrame([{"id": t.get("id"), "slug": t.get("slug"), "label": t.get("label")} for t in tags])
+    print(f"Reference market: {m.get('question')}")
+    return df.drop_duplicates() if not df.empty else df
+
+
+def _check_tag_filter(raw, tag_id, keywords=("bitcoin", "btc")):
+    """Fail loudly if tag_id was ignored (results would be all topics again)."""
+    if tag_id is None or len(raw) < 20:
+        return
+    share = np.mean([any(k in (m.get("question") or "").lower() for k in keywords) for m in raw])
+    if share < 0.3:
+        raise GammaQueryError(f"tag_id={tag_id} seems ignored: only {share:.0%} of returned "
+                              "markets mention Bitcoin.")
 
 
 class _OffsetLimit(Exception):
@@ -109,20 +169,19 @@ def _end_dates(batch):
     return pd.to_datetime([b.get("endDate") for b in batch], utc=True, errors="coerce")
 
 
-def _fetch_window(session, w0, w1, limit, max_pages):
+def _fetch_window(session, w0, w1, limit, max_pages, tag_id=None):
     """Markets ending in [w0, w1], scanned in endDate order from w0.
 
-    Does not trust end_date_max (Gamma was observed to return >2,000 markets
-    for a one-minute window): it keeps only rows inside the window and stops
-    as soon as the ordered scan passes w1. Ordering and end_date_min are
-    verified on every page, so a silently ignored parameter raises instead of
-    producing a wrong dataset. The offset advances by rows actually received,
-    because Gamma may cap the page size below `limit`.
+    Keeps only rows inside the window and stops once the ordered scan passes
+    w1, so correctness does not depend on end_date_max. Ordering and
+    end_date_min are verified on every page, so a silently ignored parameter
+    raises instead of producing a wrong dataset. The offset advances by rows
+    actually received, because Gamma caps the page size (100) below `limit`.
     """
     out, offset, prev_last = [], 0, None
     for page in range(max_pages):
         try:
-            batch = fetch_markets_page(session, w0, w1, offset, limit)
+            batch = fetch_markets_page(session, w0, w1, offset, limit, tag_id=tag_id)
         except requests.HTTPError as e:
             code = getattr(e.response, "status_code", None)
             if offset > 0 and code in (400, 422):
@@ -175,32 +234,35 @@ def diagnose_gamma(session, day, hour=12):
 
 
 def fetch_window_raw(session, w0, w1, limit=500, max_pages=400,
-                     min_window=pd.Timedelta(minutes=1)):
+                     min_window=pd.Timedelta(minutes=1), tag_id=None):
     """All closed markets ending in [w0, w1]; halves the window when the API
     refuses to paginate deep enough, so busy periods are still read completely."""
     try:
-        return _fetch_window(session, w0, w1, limit, max_pages)
+        return _fetch_window(session, w0, w1, limit, max_pages, tag_id)
     except _OffsetLimit:
         if w1 - w0 <= min_window:
-            raise RuntimeError(f"Too many markets end within {w0}–{w1} to page through.")
+            raise RuntimeError(
+                f"More than ~2,000 markets end within {w0}–{w1} (many share one exact endDate), "
+                f"too many to page through{'' if tag_id is not None else '; filter by tag_id'}.")
         mid = (w0 + (w1 - w0) / 2).floor("s")
-        return (fetch_window_raw(session, w0, mid, limit, max_pages, min_window)
-                + fetch_window_raw(session, mid, w1, limit, max_pages, min_window))
+        return (fetch_window_raw(session, w0, mid, limit, max_pages, min_window, tag_id)
+                + fetch_window_raw(session, mid, w1, limit, max_pages, min_window, tag_id))
 
 
-def fetch_day_raw(session, day_start, day_end, limit=500, max_pages=400):
-    """Every closed market (any topic) whose end date falls in [day_start, day_end).
+def fetch_day_raw(session, day_start, day_end, limit=500, max_pages=400, tag_id=None):
+    """Every closed market (of tag_id, if given) whose end date falls in the day.
 
-    Queried hour by hour (a busy day has more markets than Gamma lets you
-    page through in one query), de-duplicated because window edges overlap.
+    Queried hour by hour, de-duplicated because window edges overlap.
     """
     out, seen = [], set()
     for h0 in pd.date_range(day_start, day_end, freq="h", inclusive="left"):
-        for m in fetch_window_raw(session, h0, min(h0 + pd.Timedelta(hours=1), day_end), limit, max_pages):
+        w1 = min(h0 + pd.Timedelta(hours=1), day_end)
+        for m in fetch_window_raw(session, h0, w1, limit, max_pages, tag_id=tag_id):
             key = m.get("conditionId") or m.get("id")
             if key not in seen:
                 seen.add(key)
                 out.append(m)
+    _check_tag_filter(out, tag_id)
     return out
 
 
@@ -224,20 +286,23 @@ def question_templates(raw, keywords=("bitcoin", "btc")):
 
 
 def fetch_markets(start=config.START_DATE, end=config.END_DATE, session=None,
-                  limit=500, max_pages=400, verbose=True):
+                  limit=500, max_pages=400, verbose=True, tag_id=None):
     """All closed BTC threshold markets whose expiry lies in [start, end).
 
-    Queried one UTC day at a time with the Gamma end-date filter, so the
-    result does not depend on how many unrelated markets exist (the v1 code
-    only scanned the newest 5,000 closed markets and silently missed the rest).
+    Queried per UTC day (hour by hour) with the Gamma end-date filter and the
+    Bitcoin tag, so the result does not depend on how many unrelated markets
+    exist (the v1 code only scanned the newest 5,000 closed markets).
     """
     s = session or make_session()
+    tag_id = resolve_tag_id(s) if tag_id is None else tag_id
+    if verbose:
+        print(f"Gamma tag filter: tag_id={tag_id} ('{config.GAMMA_TAG_SLUG}')")
     days = pd.date_range(pd.Timestamp(start, tz="UTC"), pd.Timestamp(end, tz="UTC"),
                          freq="D", inclusive="left")
     records, seen, hinted = [], set(), False
     for d0 in days:
         d1 = d0 + pd.Timedelta(days=1)
-        raw = fetch_day_raw(s, d0, d1, limit, max_pages)
+        raw = fetch_day_raw(s, d0, d1, limit, max_pages, tag_id=tag_id)
         n_day = 0
         for m in raw:
             rec = parse_market(m)
