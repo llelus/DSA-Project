@@ -41,9 +41,11 @@ Design choices that matter for correctness:
 * **Inference on the 0.05–0.95 band**, where the price can still move.
 * **Dependence.** Markets that expire in the same hour share one BTC path, so standard errors and
   bootstrap CIs are clustered by expiry hour, and ML folds are blocks of whole expiry hours in time order.
-* **Settlement check.** Notebook 01 recomputes every outcome from the BTC series
-  (settlement close > strike). Agreement near 100% confirms that the BTC data is the resolution
-  source and that the fair value is anchored to the right price.
+* **Settlement check.** Each market resolves YES if the Binance BTC/USDT **1-hour candle that ends
+  at expiry** closes above the strike. That close equals the close of the 1-minute candle opening at
+  expiry − 1 min. Notebook 01 recomputes every outcome this way: it reproduced 100% of the 29,228
+  markets of Sep–Oct 2026. This confirms that the BTC data is the resolution source and that the
+  fair value is anchored to the right price.
 
 ## Results
 
