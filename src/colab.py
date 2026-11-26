@@ -21,17 +21,17 @@ def _secret(userdata, name, default=None):
     return value or default
 
 
-def _run(args, token=""):
+def _run(args, token="", quiet=False):
     out = subprocess.run(args, cwd=config.ROOT, capture_output=True, text=True)
     text = (out.stdout + out.stderr).strip()
     if token:
         text = text.replace(token, "***")
-    if text:
+    if text and not quiet:
         print(text)
     return out.returncode
 
 
-def push(message, paths=("data/raw", "figures", "results")):
+def _token_and_url():
     from google.colab import userdata  # only available inside Colab
 
     owner = config.REPO_SLUG.split("/")[0]
@@ -39,12 +39,40 @@ def push(message, paths=("data/raw", "figures", "results")):
     _run(["git", "config", "user.name", _secret(userdata, "GIT_NAME", owner)])
     _run(["git", "config", "user.email",
           _secret(userdata, "GIT_EMAIL", f"{owner}@users.noreply.github.com")])
-    _run(["git", "pull", "--rebase", "--autostash", "origin", "main"])
+    return token, f"https://{token}@github.com/{config.REPO_SLUG}.git"
+
+
+def check_ready():
+    """Fail before a long download if pushing to GitHub would not work."""
+    token, url = _token_and_url()
+    if _run(["git", "push", "--dry-run", url, "HEAD:main"], token=token, quiet=True) != 0:
+        raise RuntimeError("GITHUB_TOKEN cannot push to the repository (expired, or no 'repo' "
+                           "write scope). Create a new token and update the Colab secret.")
+    print("GitHub push check passed: downloaded data will be saved during collection.")
+
+
+def push(message, paths=("data/raw", "figures", "results")):
+    """Commit `paths` and push to main. Returns True if the data is on GitHub."""
+    token, url = _token_and_url()
+    _run(["git", "pull", "-q", "--rebase", "--autostash", "origin", "main"])
     _run(["git", "add", *paths])
     if _run(["git", "diff", "--cached", "--quiet"]) == 0:
-        print("Nothing to commit.")
-        return
-    _run(["git", "commit", "-m", message])
-    url = f"https://{token}@github.com/{config.REPO_SLUG}.git"
-    code = _run(["git", "push", url, "HEAD:main"], token=token)
-    print("Pushed." if code == 0 else "Push FAILED — check the GITHUB_TOKEN secret.")
+        print("Nothing new to commit.")
+        return True
+    _run(["git", "commit", "-q", "-m", message])
+    ok = _run(["git", "push", "-q", url, "HEAD:main"], token=token) == 0
+    print(f"Pushed: {message}" if ok else "Push FAILED — check the GITHUB_TOKEN secret.")
+    return ok
+
+
+def checkpoint(message, paths=("data/raw",)):
+    """push() for use during long downloads: never interrupts the download.
+
+    A failed push only prints a warning; the files stay on disk and the next
+    checkpoint retries them.
+    """
+    try:
+        return push(message, paths)
+    except Exception as e:      # network hiccup, git conflict, ...
+        print(f"WARNING: checkpoint push failed ({e}); will retry at the next checkpoint.")
+        return False

@@ -382,15 +382,19 @@ def _safe_history_frame(row, session):
         return None, f"{row.condition_id}: {e}"
 
 
-def collect_prices(markets, out_dir=config.RAW_PRICES_DIR, workers=4, session=None):
+def collect_prices(markets, out_dir=config.RAW_PRICES_DIR, workers=4, session=None,
+                   checkpoint=None, checkpoint_every=10):
     """Download price histories, one parquet per expiry day (resumable).
 
     A failing market is logged and skipped; if every market of a day fails the
     API itself is the problem, so collection stops with the first error.
+    checkpoint(message) is called after every `checkpoint_every` new day files
+    and once at the end, e.g. to push the files to GitHub so a lost Colab
+    runtime costs at most that many days of downloading.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     s = session or make_session()
-    summary = []
+    summary, new_days, last_day = [], 0, None
     for day, grp in markets.groupby(markets["market_end"].dt.strftime("%Y-%m-%d")):
         path = out_dir / f"{day}.parquet"
         if path.exists():
@@ -403,9 +407,14 @@ def collect_prices(markets, out_dir=config.RAW_PRICES_DIR, workers=4, session=No
             raise RuntimeError(f"All {len(grp)} requests failed on {day}; first error: {errors[0]}")
         if ok:
             pd.concat(ok, ignore_index=True).to_parquet(path, index=False)
+            new_days, last_day = new_days + 1, day
         summary.append({"day": day, "markets": len(grp), "with_history": len(ok), "errors": len(errors)})
         print(f"{day}: {len(ok)}/{len(grp)} markets with price history"
               + (f", {len(errors)} errors (e.g. {errors[0]})" if errors else ""))
+        if checkpoint and new_days and new_days % checkpoint_every == 0:
+            checkpoint(f"data: Polymarket price histories up to {day}")
+    if checkpoint and new_days % checkpoint_every:
+        checkpoint(f"data: Polymarket price histories up to {last_day}")
     return pd.DataFrame(summary)
 
 
