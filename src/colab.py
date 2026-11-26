@@ -1,14 +1,24 @@
 """Colab helper: commit and push generated files back to GitHub.
 
 Credentials and identity come from Colab secrets (key icon in the sidebar):
-  GITHUB_TOKEN  personal access token with repo scope
-  GIT_NAME      commit author name
-  GIT_EMAIL     commit author e-mail
+  GITHUB_TOKEN  personal access token with repo scope (required)
+  GIT_NAME      commit author name   (optional; default: the repo owner)
+  GIT_EMAIL     commit author e-mail (optional; default: GitHub no-reply address)
 so nothing personal is hard-coded in the notebooks.
 """
 import subprocess
 
 from . import config
+
+
+def _secret(userdata, name, default=None):
+    try:
+        value = userdata.get(name)
+    except Exception:            # SecretNotFoundError / NotebookAccessError
+        value = None
+    if not value and default is None:
+        raise RuntimeError(f"Colab secret {name} is missing (key icon in the left sidebar).")
+    return value or default
 
 
 def _run(args, token=""):
@@ -24,9 +34,11 @@ def _run(args, token=""):
 def push(message, paths=("data/raw", "figures", "results")):
     from google.colab import userdata  # only available inside Colab
 
-    token = userdata.get("GITHUB_TOKEN")
-    _run(["git", "config", "user.name", userdata.get("GIT_NAME")])
-    _run(["git", "config", "user.email", userdata.get("GIT_EMAIL")])
+    owner = config.REPO_SLUG.split("/")[0]
+    token = _secret(userdata, "GITHUB_TOKEN")
+    _run(["git", "config", "user.name", _secret(userdata, "GIT_NAME", owner)])
+    _run(["git", "config", "user.email",
+          _secret(userdata, "GIT_EMAIL", f"{owner}@users.noreply.github.com")])
     _run(["git", "pull", "--rebase", "--autostash", "origin", "main"])
     _run(["git", "add", *paths])
     if _run(["git", "diff", "--cached", "--quiet"]) == 0:

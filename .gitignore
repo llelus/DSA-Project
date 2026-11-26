@@ -5,6 +5,7 @@ __pycache__/
 
 # Derived data: rebuilt from data/raw by src.dataset.load_panel()
 data/processed/*.parquet
+data/processed/*.meta.json
 
 # Local environments
 .venv/

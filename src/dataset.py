@@ -9,6 +9,8 @@ One row = one market at one minute t strictly before expiry, with
   fair       BTC-implied probability that the market resolves YES
   gap        fair - price  (positive = Polymarket too low relative to BTC)
 """
+import json
+
 import numpy as np
 import pandas as pd
 from scipy.stats import norm
@@ -71,8 +73,8 @@ def fair_probability(S, K, sigma_1m, tau_min):
     return p
 
 
-def build_panel(markets=None, prices=None, btc=None,
-                offset_min=config.SETTLE_CANDLE_OFFSET_MIN):
+def build_panel(markets=None, prices=None, btc=None, offset_min=None):
+    offset_min = config.SETTLE_CANDLE_OFFSET_MIN if offset_min is None else offset_min
     markets = load_markets_csv() if markets is None else markets
     prices = load_prices() if prices is None else prices
     btc = load_btc() if btc is None else btc
@@ -99,6 +101,7 @@ def build_panel(markets=None, prices=None, btc=None,
             "ts": grid,
             "market_end": r.market_end,
             "strike": r.strike,
+            "volume": float(getattr(r, "volume", np.nan)),
             "result_yes_won": int(r.result_yes_won),
             "price": p_val[idx],
             "stale_min": (grid - p_ts[idx]).total_seconds() / 60,
@@ -118,13 +121,30 @@ def build_panel(markets=None, prices=None, btc=None,
     return panel
 
 
+PANEL_META = config.PANEL.with_suffix(".meta.json")
+
+
+def _panel_params():
+    """Settings the panel depends on; a cached panel built with others is stale."""
+    return {"settle_offset_min": config.SETTLE_CANDLE_OFFSET_MIN,
+            "vol_window_min": config.VOL_WINDOW_MIN,
+            "max_market_hours": config.MAX_MARKET_HOURS, "version": 2}
+
+
 def load_panel(rebuild=False, **kwargs):
-    """Read the cached panel, or build it from data/raw and cache it."""
-    if config.PANEL.exists() and not rebuild:
+    """Read the cached panel, or (re)build it from data/raw and cache it.
+
+    The cache is rebuilt automatically when config values it depends on change.
+    """
+    params = _panel_params()
+    fresh = (config.PANEL.exists() and PANEL_META.exists()
+             and json.loads(PANEL_META.read_text()) == params)
+    if fresh and not rebuild:
         return pd.read_parquet(config.PANEL)
     panel = build_panel(**kwargs)
     config.PROCESSED.mkdir(parents=True, exist_ok=True)
     panel.to_parquet(config.PANEL, index=False)
+    PANEL_META.write_text(json.dumps(params))
     return panel
 
 

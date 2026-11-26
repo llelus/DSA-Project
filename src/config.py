@@ -42,8 +42,11 @@ REFERENCE_CONDITION_ID = "0xea542d6cc50e2671208f0c6d35f4b5c94e6bfe5b81e2eb07d72d
 # ── BTC spot data ────────────────────────────────────────────────────────────
 BTC_SYMBOL = "BTCUSDT"        # Binance spot, 1-minute klines (data.binance.vision)
 # Settlement candle = the 1-minute candle that OPENS at market_end + this offset.
-# Notebook 01 checks which offset reproduces the recorded outcomes best.
-SETTLE_CANDLE_OFFSET_MIN = 0
+# Resolution rule: close of the Binance BTC/USDT 1-HOUR candle that ends at the
+# market's end time, i.e. the close of the 1-minute candle opening at end − 1 min.
+# Notebook 01 confirmed it: offset −1 reproduces 100% of 29,228 outcomes
+# (Sep–Oct 2026), versus 99.4% for offset 0.
+SETTLE_CANDLE_OFFSET_MIN = -1
 
 # ── Analysis constants ───────────────────────────────────────────────────────
 VOL_WINDOW_MIN = 60           # trailing window for realised BTC volatility
